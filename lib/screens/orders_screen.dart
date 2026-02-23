@@ -5,12 +5,15 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
+import '../core/page_transitions.dart';
 import '../core/theme.dart';
 import '../models/dashboard_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/shimmer_skeletons.dart';
 import 'menu_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -209,7 +212,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                   icon: const Icon(Icons.restaurant_menu_rounded, size: 20),
                   onPressed: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const MenuScreen()),
+                    SlideRoute(page: const MenuScreen()),
                   ),
                 ),
               ),
@@ -578,30 +581,11 @@ class _OrdersScreenState extends State<OrdersScreen>
                         .read<DashboardProvider>()
                         .claimOrder(api, o.id);
                     if (success && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: [
-                              const Icon(
-                                Icons.check_circle_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Order #${o.id} claimed!',
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                          backgroundColor: AppTheme.success,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                      showAppToast(
+                        context,
+                        message: 'Order #${o.id} claimed!',
+                        subtitle: 'Check your active orders tab',
+                        type: ToastType.success,
                       );
                       _tabController.animateTo(1);
                       _loadMyOrders();
@@ -664,6 +648,9 @@ class _OrdersScreenState extends State<OrdersScreen>
   //  TAB B: MY ORDERS
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Widget _buildMyOrdersTab() {
+    if (_myOrders.isEmpty && _loading) {
+      return const OrdersSkeleton();
+    }
     if (_myOrders.isEmpty && !_loading) {
       return Center(
         child: Column(

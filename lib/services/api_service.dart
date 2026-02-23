@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../core/config.dart';
 import '../models/dashboard_model.dart';
+import '../models/payslip_model.dart';
 import '../models/user_model.dart';
 
 num _parseNum(dynamic v) {
@@ -160,6 +161,56 @@ class ApiService {
     final data = await _handleResponse(res);
     return MenuResponse.fromJson(data['data'] as Map<String, dynamic>);
   }
+
+  // Waiter Status (Online/Offline)
+  Future<Map<String, dynamic>> updateWaiterStatus(bool isOnline) async {
+    final res = await http.patch(
+      Uri.parse('$baseUrl/waiter/status'),
+      headers: _headers,
+      body: jsonEncode({'is_online': isOnline}),
+    );
+    final data = await _handleResponse(res);
+    return data;
+  }
+
+  // Salary Slips
+  Future<List<SalarySlipSummary>> getSalarySlips() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/waiter/salary-slips'),
+      headers: _headers,
+    );
+    final data = await _handleResponse(res);
+    final list = data['data'] as List<dynamic>? ?? [];
+    return list
+        .map((e) => SalarySlipSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SalarySlipDetail> getSalarySlipDetail(String period) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/waiter/salary-slips/$period'),
+      headers: _headers,
+    );
+    final data = await _handleResponse(res);
+    return SalarySlipDetail.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  String getSalarySlipDownloadUrl(String period) {
+    return '$baseUrl/waiter/salary-slips/$period/download';
+  }
+
+  // Work History
+  Future<List<WorkHistoryEntry>> getWorkHistory() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/waiter/history'),
+      headers: _headers,
+    );
+    final data = await _handleResponse(res);
+    final list = data['data'] as List<dynamic>? ?? [];
+    return list
+        .map((e) => WorkHistoryEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
 }
 
 class ApiException implements Exception {
@@ -190,6 +241,9 @@ class DashboardData {
   final List<PendingRequest> pendingRequests;
   final List<RecentFeedback> recentFeedback;
   final List<MyOrderToday> myOrdersToday;
+  final Map<String, dynamic>? waiterInfo;
+  final bool isOnline;
+  final bool isLinked;
 
   DashboardData({
     required this.stats,
@@ -197,6 +251,9 @@ class DashboardData {
     required this.pendingRequests,
     required this.recentFeedback,
     required this.myOrdersToday,
+    this.waiterInfo,
+    this.isOnline = true,
+    this.isLinked = true,
   });
 
   factory DashboardData.fromJson(Map<String, dynamic> json) {
@@ -222,6 +279,9 @@ class DashboardData {
               ?.map((e) => MyOrderToday.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      waiterInfo: json['waiter'] as Map<String, dynamic>?,
+      isOnline: json['is_online'] as bool? ?? true,
+      isLinked: json['is_linked'] as bool? ?? true,
     );
   }
 }

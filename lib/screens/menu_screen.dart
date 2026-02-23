@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/shimmer_skeletons.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -73,9 +74,7 @@ class _MenuScreenState extends State<MenuScreen> {
         ),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.primary),
-            )
+          ? const MenuSkeleton()
           : Column(
               children: [
                 Padding(

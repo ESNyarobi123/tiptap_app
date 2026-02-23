@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/shimmer_skeletons.dart';
 
 class TipsScreen extends StatefulWidget {
   const TipsScreen({super.key});
@@ -59,9 +60,7 @@ class _TipsScreenState extends State<TipsScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.primary),
-            )
+          ? const TipsSkeleton()
           : RefreshIndicator(
               onRefresh: _load,
               color: AppTheme.primary,

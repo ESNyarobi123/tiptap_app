@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../core/page_transitions.dart';
 import '../core/theme.dart';
 import '../models/dashboard_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
+import '../widgets/animated_counter.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/shimmer_skeletons.dart';
+import '../widgets/staggered_animation.dart';
 import 'menu_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -34,6 +40,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final auth = context.read<AuthProvider>();
     final api = auth.api;
     await _dashProvider.loadFull(api);
+    // Sync waiter profile from dashboard response
+    final dashData = _dashProvider.data;
+    final waiterInfo = dashData?.waiterInfo;
+    if (waiterInfo != null && mounted) {
+      auth.updateUserFromWaiterInfo(waiterInfo, isLinked: dashData?.isLinked);
+    }
     _dashProvider.startStatsPolling(api);
   }
 
@@ -50,6 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final user = auth.user; // User might be null initially
     final data = dash.data;
     final stats = dash.stats ?? data?.stats;
+    final isLinked = user?.isLinked ?? dash.isLinked;
 
     // Use a safety check for user
     if (user == null) {
@@ -70,33 +83,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            _buildZone1Header(user),
+            _buildZone1Header(user, isLinked),
             if (dash.isLoading && data == null)
-              const SliverFillRemaining(
-                child: Center(
-                  child: CircularProgressIndicator(color: AppTheme.primary),
-                ),
+              SliverToBoxAdapter(
+                child: isLinked
+                    ? const DashboardSkeleton()
+                    : const UnlinkedDashboardSkeleton(),
               )
-            else
+            else if (!isLinked)
+              // ── UNLINKED WAITER VIEW ──
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (stats != null) _buildZone2Hero(stats),
+                      StaggeredFadeSlide(
+                        index: 0,
+                        child: _buildUnlinkedHeroCard(user),
+                      ),
+                      const SizedBox(height: 24),
+                      if (stats != null)
+                        StaggeredFadeSlide(
+                          index: 1,
+                          child: _buildZone2Hero(stats),
+                        ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              // ── LINKED WAITER VIEW (FULL DASHBOARD) ──
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (stats != null)
+                        StaggeredFadeSlide(
+                          index: 0,
+                          child: _buildZone2Hero(stats),
+                        ),
                       const SizedBox(height: 24),
                       if ((data?.pendingRequests.length ?? 0) > 0) ...[
-                        _buildZone3Urgent(data!.pendingRequests, auth.api),
+                        StaggeredFadeSlide(
+                          index: 1,
+                          child: _buildZone3Urgent(
+                            data!.pendingRequests,
+                            auth.api,
+                          ),
+                        ),
                         const SizedBox(height: 24),
                       ],
-                      _buildZone4Marketplace(
-                        data?.unassignedOrders ?? [],
-                        auth.api,
+                      StaggeredFadeSlide(
+                        index: 2,
+                        child: _buildZone4Marketplace(
+                          data?.unassignedOrders ?? [],
+                          auth.api,
+                        ),
                       ),
                       const SizedBox(height: 24),
                       if ((data?.recentFeedback.length ?? 0) > 0)
-                        _buildMotivationSection(data!.recentFeedback),
+                        StaggeredFadeSlide(
+                          index: 3,
+                          child: _buildMotivationSection(data!.recentFeedback),
+                        ),
                     ],
                   ),
                 ),
@@ -108,9 +160,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Zone 1: Premium Header with Restaurant details & Waiter Profile
-  Widget _buildZone1Header(dynamic user) {
+  Widget _buildZone1Header(dynamic user, bool isLinked) {
     return SliverAppBar(
-      expandedHeight: 220, // Increased height to prevent overflow
+      expandedHeight: 220,
       backgroundColor: Colors.transparent,
       floating: false,
       pinned: true,
@@ -126,10 +178,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    AppTheme.primary.withValues(alpha: 0.15),
-                    AppTheme.surface,
-                  ],
+                  colors: isLinked
+                      ? [
+                          AppTheme.primary.withValues(alpha: 0.15),
+                          AppTheme.surface,
+                        ]
+                      : [
+                          const Color(0xFFD97706).withValues(alpha: 0.12),
+                          AppTheme.surface,
+                        ],
                 ),
               ),
             ),
@@ -142,10 +199,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 height: 250,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppTheme.secondary.withValues(alpha: 0.1),
+                  color:
+                      (isLinked ? AppTheme.secondary : const Color(0xFFD97706))
+                          .withValues(alpha: 0.1),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.secondary.withValues(alpha: 0.2),
+                      color:
+                          (isLinked
+                                  ? AppTheme.secondary
+                                  : const Color(0xFFD97706))
+                              .withValues(alpha: 0.2),
                       blurRadius: 100,
                       spreadRadius: 20,
                     ),
@@ -161,72 +224,130 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Restaurant Badge
-                    GlassCard(
-                      borderRadius: 12,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      tint: AppTheme.primary.withValues(alpha: 0.1),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
+                    // Restaurant Badge (linked) or TIPTAP Brand (unlinked)
+                    if (isLinked)
+                      GlassCard(
+                        borderRadius: 12,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        tint: AppTheme.primary.withValues(alpha: 0.1),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.storefront_rounded,
+                                color: AppTheme.primary,
+                                size: 20,
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.storefront_rounded,
-                              color: AppTheme.primary,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  (user.restaurantName ?? 'Restaurant')
-                                      .toUpperCase(),
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    (user.restaurantName ?? 'Restaurant')
+                                        .toUpperCase(),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.location_on_rounded,
-                                      size: 10,
-                                      color: Colors.white70,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        user.restaurantLocation ??
-                                            'Unknown Location',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 11,
-                                          color: Colors.white70,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.location_on_rounded,
+                                        size: 10,
+                                        color: Colors.white70,
                                       ),
-                                    ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          user.restaurantLocation ??
+                                              'Unknown Location',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            color: Colors.white70,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      GlassCard(
+                        borderRadius: 12,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        tint: const Color(0xFFD97706).withValues(alpha: 0.1),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFFD97706),
+                                    Color(0xFFFBBF24),
                                   ],
                                 ),
-                              ],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.link_off_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'TIPTAP WAITER',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Not linked to any restaurant',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      color: const Color(
+                                        0xFFFBBF24,
+                                      ).withValues(alpha: 0.8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     const Spacer(),
                     // Waiter Info Area
                     Row(
@@ -239,67 +360,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Habari, ${user.name.split(' ')[0]}', // First name only
+                                'Habari, ${user.name.split(' ')[0]}',
                                 style: GoogleFonts.poppins(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                 ),
                               ),
-                              Container(
-                                margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.secondary.withValues(
-                                    alpha: 0.2,
+                              if (user.waiterCode != null)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
                                   ),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
+                                  decoration: BoxDecoration(
                                     color: AppTheme.secondary.withValues(
-                                      alpha: 0.3,
+                                      alpha: 0.2,
+                                    ),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: AppTheme.secondary.withValues(
+                                        alpha: 0.3,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                child: Text(
-                                  'CODE: ${user.waiterCode ?? "N/A"}',
-                                  style: GoogleFonts.robotoMono(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.secondary,
+                                  child: Text(
+                                    'CODE: ${user.waiterCode}',
+                                    style: GoogleFonts.robotoMono(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.secondary,
+                                    ),
+                                  ),
+                                )
+                              else if (user.globalWaiterNumber != null)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFFD97706),
+                                        Color(0xFFFBBF24),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.fingerprint_rounded,
+                                        color: Colors.white,
+                                        size: 12,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        user.globalWaiterNumber!,
+                                        style: GoogleFonts.robotoMono(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
-                        // QR Button
-                        GestureDetector(
-                          onTap: () => _showQRDialog(context, user.waiterQrUrl),
-                          child: Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              gradient: AppTheme.primaryGradient,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.primary.withValues(
-                                    alpha: 0.4,
+                        // QR Button (only when linked)
+                        if (isLinked)
+                          GestureDetector(
+                            onTap: () =>
+                                _showQRDialog(context, user.waiterQrUrl),
+                            child: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.primaryGradient,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.primary.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
                                   ),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.qr_code_rounded,
-                              color: Colors.white,
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.qr_code_rounded,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ],
@@ -309,51 +469,355 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-      // App Bar Actions (Menu & Online Status)
+      // App Bar Actions
       leading: IconButton(
         icon: const Icon(Icons.menu_rounded, color: Colors.white),
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MenuScreen()),
-        ),
+        onPressed: () =>
+            Navigator.push(context, SlideRoute(page: const MenuScreen())),
       ),
-      actions: [
-        Container(
-          margin: const EdgeInsets.only(right: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      actions: [if (isLinked) _buildStatusToggle()],
+    );
+  }
+
+  /// Unlinked waiter hero card — shows unique code and CTA
+  Widget _buildUnlinkedHeroCard(dynamic user) {
+    final code = user.globalWaiterNumber ?? 'TIPTAP-W-?????';
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E1040), Color(0xFF2D1B4E)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFD97706).withValues(alpha: 0.3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFD97706).withValues(alpha: 0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+        ],
+      ),
+      child: Column(
+        children: [
+          // Fingerprint Icon
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFFD97706), Color(0xFFFBBF24)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFD97706).withValues(alpha: 0.4),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.fingerprint_rounded,
+              color: Colors.white,
+              size: 36,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Label
+          Text(
+            'Your Unique Code',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.5),
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Code
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFD97706).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Text(
+              code,
+              style: GoogleFonts.robotoMono(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFFFBBF24),
+                letterSpacing: 2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // CTA Message
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD97706).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFD97706).withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD97706).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.share_rounded,
+                    color: const Color(0xFFFBBF24).withValues(alpha: 0.8),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Share with a Manager',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withValues(alpha: 0.8),
+                        ),
+                      ),
+                      Text(
+                        'Give this code to a restaurant manager to get linked and start working.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.4),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusToggle() {
+    final dash = context.watch<DashboardProvider>();
+    final isOnline = dash.isOnline;
+    final isToggling = dash.isTogglingStatus;
+
+    final statusColor = isOnline ? AppTheme.success : const Color(0xFFEF4444);
+    final statusLabel = isOnline ? 'Online' : 'Offline';
+    final statusIcon = isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded;
+
+    return GestureDetector(
+      onTap: isToggling ? null : () => _showStatusToggleDialog(isOnline),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        margin: const EdgeInsets.only(right: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: statusColor.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+          boxShadow: isOnline
+              ? [
+                  BoxShadow(
+                    color: statusColor.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isToggling)
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: statusColor,
+                ),
+              )
+            else ...[
               Container(
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(
-                  color: AppTheme.success,
+                decoration: BoxDecoration(
+                  color: statusColor,
                   shape: BoxShape.circle,
                   boxShadow: [
-                    BoxShadow(color: AppTheme.success, blurRadius: 6),
+                    BoxShadow(color: statusColor, blurRadius: isOnline ? 6 : 2),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+            ],
+            const SizedBox(width: 8),
+            Icon(statusIcon, size: 14, color: statusColor),
+            const SizedBox(width: 4),
+            Text(
+              statusLabel,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: statusColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showStatusToggleDialog(bool currentlyOnline) {
+    final goingTo = !currentlyOnline;
+    final title = goingTo ? 'Go Online?' : 'Go Offline?';
+    final message = goingTo
+        ? 'You will start receiving customer calls and new orders.'
+        : 'You will stop receiving calls and new orders. Active orders will not be affected.';
+    final actionLabel = goingTo ? 'Go Online' : 'Go Offline';
+    final actionColor = goingTo ? AppTheme.success : const Color(0xFFEF4444);
+    final actionIcon = goingTo ? Icons.wifi_rounded : Icons.wifi_off_rounded;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: GlassCard(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: actionColor.withValues(alpha: 0.15),
+                  border: Border.all(color: actionColor.withValues(alpha: 0.3)),
+                ),
+                child: Icon(actionIcon, color: actionColor, size: 32),
+              ),
+              const SizedBox(height: 20),
               Text(
-                'Online',
+                title,
                 style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.5),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.1),
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _toggleStatus(goingTo);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: actionColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        actionLabel,
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
+  }
+
+  Future<void> _toggleStatus(bool goOnline) async {
+    final auth = context.read<AuthProvider>();
+    final dash = context.read<DashboardProvider>();
+    HapticFeedback.mediumImpact();
+    final success = await dash.toggleOnlineStatus(auth.api, goOnline);
+    if (!mounted) return;
+    if (success) {
+      showAppToast(
+        context,
+        message: goOnline ? 'You are now Online!' : 'You are now Offline',
+        subtitle: goOnline
+            ? 'Ready for orders & customer calls'
+            : 'You will not receive new orders',
+        type: goOnline ? ToastType.success : ToastType.warning,
+      );
+    } else {
+      showAppToast(
+        context,
+        message: 'Failed to update status',
+        subtitle: 'Please check your connection and try again',
+        type: ToastType.error,
+      );
+    }
   }
 
   void _showQRDialog(BuildContext context, String? qrUrl) {
@@ -426,8 +890,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         child: Column(
           children: [
-            Text(
-              'Tsh ${NumberFormat('#,###').format(stats.tipsToday)}',
+            AnimatedFormattedCounter(
+              end: stats.tipsToday,
+              prefix: 'Tsh ',
+              formatter: (v) => NumberFormat('#,###').format(v.toInt()),
               style: GoogleFonts.robotoMono(
                 fontSize: 32,
                 fontWeight: FontWeight.w900,

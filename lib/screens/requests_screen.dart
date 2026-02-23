@@ -8,6 +8,7 @@ import '../models/dashboard_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/shimmer_skeletons.dart';
 
 class RequestsScreen extends StatefulWidget {
   const RequestsScreen({super.key});
@@ -211,14 +212,7 @@ class _RequestsScreenState extends State<RequestsScreen>
 
           // ─── Content ───
           if (_loading)
-            const SliverFillRemaining(
-              child: Center(
-                child: CircularProgressIndicator(
-                  color: AppTheme.primary,
-                  strokeWidth: 2.5,
-                ),
-              ),
-            )
+            const RequestsSkeleton()
           else if (_list.isEmpty)
             SliverFillRemaining(
               child: Center(

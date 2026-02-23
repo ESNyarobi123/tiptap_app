@@ -13,6 +13,7 @@ import 'dashboard_screen.dart';
 import 'incoming_call_screen.dart';
 import 'me_screen.dart';
 import 'orders_screen.dart';
+import 'payslip_screen.dart';
 import 'requests_screen.dart';
 
 class HomeShell extends StatefulWidget {
@@ -31,6 +32,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     DashboardScreen(),
     OrdersScreen(),
     RequestsScreen(),
+    PayslipScreen(),
     MeScreen(),
   ];
 
@@ -178,7 +180,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                     Icons.notifications_active_rounded,
                     'Calls',
                   ),
-                  _navItem(3, Icons.person_rounded, 'Me'),
+                  _navItem(3, Icons.account_balance_wallet_rounded, 'Payroll'),
+                  _navItem(4, Icons.person_rounded, 'Me'),
                 ],
               ),
             ),

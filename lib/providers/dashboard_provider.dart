@@ -12,11 +12,15 @@ class DashboardProvider with ChangeNotifier {
   DashboardData? _data;
   DashboardStats? _stats;
   bool _isLoading = false;
+  bool _isTogglingStatus = false;
   String? _error;
 
   DashboardData? get data => _data;
   DashboardStats? get stats => _stats;
   bool get isLoading => _isLoading;
+  bool get isTogglingStatus => _isTogglingStatus;
+  bool get isOnline => _data?.isOnline ?? true;
+  bool get isLinked => _data?.isLinked ?? true;
   String? get error => _error;
 
   Future<void> loadFull(ApiService api) async {
@@ -51,6 +55,9 @@ class DashboardProvider with ChangeNotifier {
             pendingRequests: _data!.pendingRequests,
             recentFeedback: _data!.recentFeedback,
             myOrdersToday: _data!.myOrdersToday,
+            waiterInfo: _data!.waiterInfo,
+            isOnline: _data!.isOnline,
+            isLinked: _data!.isLinked,
           );
         }
         notifyListeners();
@@ -92,6 +99,40 @@ class DashboardProvider with ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Toggle waiter online/offline status
+  Future<bool> toggleOnlineStatus(ApiService api, bool goOnline) async {
+    _isTogglingStatus = true;
+    notifyListeners();
+    try {
+      await api.updateWaiterStatus(goOnline);
+      // Update local data with new status
+      if (_data != null) {
+        _data = DashboardData(
+          stats: _data!.stats,
+          unassignedOrders: _data!.unassignedOrders,
+          pendingRequests: _data!.pendingRequests,
+          recentFeedback: _data!.recentFeedback,
+          myOrdersToday: _data!.myOrdersToday,
+          waiterInfo: _data!.waiterInfo,
+          isOnline: goOnline,
+          isLinked: _data!.isLinked,
+        );
+      }
+      _isTogglingStatus = false;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _error = e.message;
+      _isTogglingStatus = false;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _isTogglingStatus = false;
       notifyListeners();
       return false;
     }

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/shimmer_skeletons.dart';
 
 class RatingsScreen extends StatefulWidget {
   const RatingsScreen({super.key});
@@ -55,9 +56,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.primary),
-            )
+          ? const RatingsSkeleton()
           : _list.isEmpty
           ? Center(
               child: Text(

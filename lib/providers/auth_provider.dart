@@ -47,7 +47,11 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> login(String email, String password, {bool rememberMe = false}) async {
+  Future<bool> login(
+    String email,
+    String password, {
+    bool rememberMe = false,
+  }) async {
     _error = null;
     _isLoading = true;
     notifyListeners();
@@ -78,6 +82,31 @@ class AuthProvider with ChangeNotifier {
 
   void setUser(UserModel user) {
     _user = user;
+    notifyListeners();
+  }
+
+  /// Update user profile fields from dashboard waiter block
+  void updateUserFromWaiterInfo(
+    Map<String, dynamic> waiterInfo, {
+    bool? isLinked,
+  }) {
+    if (_user == null) return;
+    final u = _user!;
+    _user = UserModel(
+      id: waiterInfo['id'] as int? ?? u.id,
+      name: waiterInfo['name'] as String? ?? u.name,
+      email: u.email,
+      restaurantId: u.restaurantId,
+      restaurantName: u.restaurantName,
+      restaurantLocation: u.restaurantLocation,
+      waiterCode: waiterInfo['waiter_code'] as String? ?? u.waiterCode,
+      globalWaiterNumber:
+          waiterInfo['global_waiter_number'] as String? ?? u.globalWaiterNumber,
+      waiterQrUrl: waiterInfo['waiter_qr_url'] as String? ?? u.waiterQrUrl,
+      isLinked: isLinked ?? u.isLinked,
+      roles: u.roles,
+    );
+    _storage.setStoredUser(_user!);
     notifyListeners();
   }
 

@@ -87,7 +87,11 @@ class _MeScreenState extends State<MeScreen>
                   children: [
                     _buildQuickStats(),
                     const SizedBox(height: 16),
-                    _buildQRSection(user),
+                    if (!user.isLinked)
+                      _buildUnlinkedBanner(user)
+                    else ...[
+                      _buildQRSection(user),
+                    ],
                     const SizedBox(height: 16),
                     _buildEarningsCard(),
                     const SizedBox(height: 20),
@@ -283,24 +287,79 @@ class _MeScreenState extends State<MeScreen>
                           ],
                           if (user.waiterCode != null) ...[
                             const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: AppTheme.primaryGradient,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'CODE: ${user.waiterCode!}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                  letterSpacing: 1,
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: AppTheme.primaryGradient,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'CODE: ${user.waiterCode!}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                              ],
+                            ),
+                          ],
+                          if (user.globalWaiterNumber != null) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFFD97706),
+                                        Color(0xFFFBBF24),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFFD97706,
+                                        ).withValues(alpha: 0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.fingerprint_rounded,
+                                        color: Colors.white,
+                                        size: 13,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        user.globalWaiterNumber!,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ],
@@ -397,6 +456,85 @@ class _MeScreenState extends State<MeScreen>
             style: GoogleFonts.poppins(
               fontSize: 10,
               color: Colors.white.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  //  UNLINKED BANNER
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Widget _buildUnlinkedBanner(dynamic user) {
+    final code = user.globalWaiterNumber ?? 'N/A';
+    return GlassCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFFD97706), Color(0xFFFBBF24)],
+              ),
+            ),
+            child: const Icon(
+              Icons.link_off_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Not Linked to a Restaurant',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFD97706).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.fingerprint_rounded,
+                  color: Color(0xFFFBBF24),
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  code,
+                  style: GoogleFonts.robotoMono(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFFBBF24),
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Share this code with a restaurant manager to get linked and start receiving orders.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: Colors.white.withValues(alpha: 0.4),
+              height: 1.5,
             ),
           ),
         ],
