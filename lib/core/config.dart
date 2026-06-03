@@ -1,4 +1,5 @@
 class AppConfig {
-  static const String baseUrl = 'https://tiptapafrica.co.tz/api';
+  /// South Africa production API (TIPTAP_sauth Laravel).
+  static const String baseUrl = 'https://tiptapafrica.co.za/api';
   static const int statsPollIntervalSeconds = 30;
 }
